@@ -3,7 +3,7 @@
 # Python 3.14, which segfaults on Streamlit Cloud's servers. Requires the app's
 # Python version to be set to 3.13 in the Streamlit dashboard (pandas 2.2 has no
 # 3.14 wheels).
-streamlit>=1.36,<2
+streamlit>=1.43,<2
 psycopg2-binary>=2.9.9,<2.10
 pandas>=2.2,<2.3
 numpy>=2.1,<2.2

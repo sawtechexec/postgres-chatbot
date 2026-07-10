@@ -72,7 +72,7 @@ def render_result(entry: dict) -> None:
     if entry.get("sql"):
         st.code(entry["sql"], language="sql")
     df: pd.DataFrame = entry["df"]
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
     # Offer a quick chart when it makes sense.
     if df.shape[1] == 2 and pd.api.types.is_numeric_dtype(df.iloc[:, 1]):
         try:
