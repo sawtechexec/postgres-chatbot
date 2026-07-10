@@ -98,8 +98,15 @@ def run_query(sql: str, params: tuple | None = None, limit: int = 1000) -> pd.Da
         raise ValueError(cleaned)
     if re.search(r"\blimit\b", cleaned, re.IGNORECASE) is None:
         cleaned = f"{cleaned}\nLIMIT {int(limit)}"
+    # Fetch via a psycopg2 cursor and build the DataFrame ourselves. Passing a
+    # raw DBAPI connection to pandas.read_sql_query is unsupported (it warns, and
+    # on some platforms the newer pandas/pyarrow stack segfaults on it).
     with get_connection() as conn:
-        return pd.read_sql_query(cleaned, conn, params=params)
+        with conn.cursor() as cur:
+            cur.execute(cleaned, params)
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+    return pd.DataFrame(rows, columns=columns)
 
 
 # ---- Schema introspection --------------------------------------------------

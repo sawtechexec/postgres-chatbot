@@ -1,18 +1,21 @@
 # Postgres Data Chatbot
 
-A Streamlit web app that chats with your AWS RDS Postgres database. It ships with
-a set of **predefined, schema-driven queries** (safe, no LLM required) and an
-**optional natural-language mode** powered by OpenAI.
+A Streamlit web app that chats with your AWS RDS Postgres database. Ask questions
+in **plain English** and it translates them to SQL with OpenAI, runs them
+read-only, and shows the results.
 
 ## Features
 
 - Web chat UI (Streamlit) with connection status and schema browser.
-- Predefined queries that adapt to *any* schema: preview rows, count rows,
-  top values in a column, numeric stats, and most-recent rows.
+- Plain-English questions → SQL via OpenAI, answered against your live schema.
 - All queries run **read-only** — the session is read-only and every statement
-  is validated to be a single `SELECT`/`WITH` before it runs.
-- Optional plain-English questions → SQL via OpenAI (only if you add an API key).
+  (including LLM-generated SQL) is validated to be a single `SELECT`/`WITH`
+  before it runs.
 - Auto-charts simple two-column results.
+
+> A library of reusable, schema-driven query helpers (preview rows, count rows,
+> top values, numeric stats, most-recent rows) lives in `queries.py`. They are
+> not surfaced in the UI, but you can import and use them directly.
 
 ## Setup
 
@@ -35,8 +38,9 @@ a set of **predefined, schema-driven queries** (safe, no LLM required) and an
    > RDS instance. That usually means the RDS security group allows inbound
    > traffic on port 5432 from your IP, or you run this from inside the same VPC.
 
-3. (Optional) To enable plain-English questions, add your `OPENAI_API_KEY` to
-   `.env`. Leave it blank to run in predefined-queries-only mode.
+3. Add your `OPENAI_API_KEY` to `.env` — it powers the plain-English chat. If
+   it's blank, the app connects but the chat shows a "natural-language mode is
+   off" notice.
 
 ## Run
 
@@ -48,15 +52,26 @@ It opens at http://localhost:8501.
 
 ## Files
 
-- `app.py` — Streamlit UI.
+- `app.py` — Streamlit UI (plain-English chat).
 - `db.py` — connection, schema introspection, read-only query guard.
-- `queries.py` — predefined queries + optional OpenAI text-to-SQL.
+- `queries.py` — OpenAI text-to-SQL, plus reusable schema-driven query helpers.
 - `.env.example` — configuration template.
+
+## Deployment
+
+See `DEPLOY.md` for Streamlit Community Cloud. Two notes learned the hard way:
+
+- Set the app's **Python version to 3.13** in the dashboard and keep the pinned
+  versions in `requirements.txt` — the unpinned bleeding-edge stack (pandas 3.0
+  / numpy 2.5 on Python 3.14) segfaults on Streamlit Cloud's Linux servers.
+- Put secrets (DB credentials, `OPENAI_API_KEY`, `APP_PASSWORD`) in the app's
+  **Settings → Secrets** box, not in `.env` (which is never uploaded).
 
 ## Safety
 
 The database session is opened `readonly=True`, and every query (including
 LLM-generated SQL) must pass `is_safe_select()`, which rejects anything that
-isn't a single `SELECT`/`WITH` statement. Predefined queries build identifiers
-with `psycopg2.sql` to avoid injection. This is defense-in-depth, but for
-production also connect with a database role that only has `SELECT` grants.
+isn't a single `SELECT`/`WITH` statement. The query helpers in `queries.py`
+build identifiers with `psycopg2.sql` to avoid injection. This is
+defense-in-depth, but for production also connect with a database role that only
+has `SELECT` grants.
