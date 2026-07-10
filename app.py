@@ -86,54 +86,20 @@ for entry in st.session_state.history:
     with st.chat_message("assistant"):
         render_result(entry)
 
-# --- Two ways to ask: predefined queries, or (optional) natural language ----
-tab_predef, tab_nl = st.tabs(["📋 Predefined queries", "💬 Ask in plain English"])
-
-with tab_predef:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        query_label = st.selectbox("Query", list(queries.PREDEFINED.keys()))
-    spec = queries.PREDEFINED[query_label]
-
-    with col2:
-        table_full = st.selectbox("Table", tables_df["full"].tolist())
-    schema_name, table_name = table_full.split(".", 1)
-
-    column_name = None
-    if "column" in spec["needs"]:
-        cols = db.list_columns(schema_name, table_name)
-        with col3:
-            column_name = st.selectbox("Column", cols["column_name"].tolist())
-
-    limit = st.slider("Row limit", 10, 1000, 50, step=10)
-
-    if st.button("Run query", type="primary"):
+# --- Ask questions in plain English -----------------------------------------
+if not queries.openai_available():
+    st.info(
+        "Natural-language mode is off. Add OPENAI_API_KEY to your .env file "
+        "to enable asking questions in plain English."
+    )
+else:
+    question = st.chat_input("Ask a question about your data…")
+    if question:
         try:
-            kwargs = {"schema": schema_name, "table": table_name, "limit": limit}
-            if column_name:
-                kwargs["column"] = column_name
-            df = spec["fn"](**kwargs)
+            sql, df = queries.ask_with_llm(question)
             st.session_state.history.append(
-                {"label": f"{query_label} — {table_full}", "df": df, "sql": None}
+                {"label": question, "df": df, "sql": sql}
             )
             st.rerun()
         except Exception as exc:  # noqa: BLE001
-            st.error(f"Query failed: {exc}")
-
-with tab_nl:
-    if not queries.openai_available():
-        st.info(
-            "Natural-language mode is off. Add OPENAI_API_KEY to your .env file "
-            "to enable asking questions in plain English."
-        )
-    else:
-        question = st.chat_input("Ask a question about your data…")
-        if question:
-            try:
-                sql, df = queries.ask_with_llm(question)
-                st.session_state.history.append(
-                    {"label": question, "df": df, "sql": sql}
-                )
-                st.rerun()
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Could not answer that: {exc}")
+            st.error(f"Could not answer that: {exc}")
