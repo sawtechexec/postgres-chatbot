@@ -9,6 +9,7 @@ import streamlit as st
 
 import db
 import queries
+import rag
 
 st.set_page_config(page_title="Postgres Chatbot", page_icon="🗄️", layout="wide")
 
@@ -62,6 +63,26 @@ with st.sidebar:
         st.error(f"Could not read schema: {exc}")
         st.stop()
 
+    st.divider()
+    st.header("Mode")
+    _rag_ready = rag.index_ready()
+    if _rag_ready:
+        mode = st.radio(
+            "How should questions be answered?",
+            ["SQL (structured queries)", "Search (semantic / RAG)"],
+            help="SQL turns your question into a database query. "
+                 "Search finds the most relevant text across all four tables "
+                 "and answers from it.",
+        )
+        with st.expander("Index contents"):
+            try:
+                st.dataframe(rag.index_stats(), width="stretch", hide_index=True)
+            except Exception:  # noqa: BLE001
+                pass
+    else:
+        mode = "SQL (structured queries)"
+        st.caption("Semantic search is off — run ingest.py to build the index.")
+
 # --- Chat history -----------------------------------------------------------
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -71,6 +92,9 @@ def render_result(entry: dict) -> None:
     st.markdown(f"**{entry['label']}**")
     if entry.get("sql"):
         st.code(entry["sql"], language="sql")
+    if entry.get("answer"):
+        st.markdown(entry["answer"])
+        st.caption("Sources (most similar chunks):")
     df: pd.DataFrame = entry["df"]
     st.dataframe(df, width="stretch")
     # Offer a quick chart when it makes sense.
@@ -96,10 +120,17 @@ else:
     question = st.chat_input("Ask a question about your data…")
     if question:
         try:
-            sql, df = queries.ask_with_llm(question)
-            st.session_state.history.append(
-                {"label": question, "df": df, "sql": sql}
-            )
+            if mode.startswith("Search"):
+                with st.spinner("Searching…"):
+                    answer, sources = rag.answer_with_rag(question)
+                st.session_state.history.append(
+                    {"label": question, "df": sources, "answer": answer}
+                )
+            else:
+                sql, df = queries.ask_with_llm(question)
+                st.session_state.history.append(
+                    {"label": question, "df": df, "sql": sql}
+                )
             st.rerun()
         except Exception as exc:  # noqa: BLE001
             st.error(f"Could not answer that: {exc}")
