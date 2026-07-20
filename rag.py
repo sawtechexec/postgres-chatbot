@@ -85,11 +85,36 @@ def search(question: str, k: int = 8, source_table: str | None = None) -> pd.Dat
         with conn.cursor() as cur:
             if source_table:
                 cur.execute("SET hnsw.iterative_scan = relaxed_order")
-                cur.execute("SET hnsw.max_scan_tuples = 100000")
+                cur.execute("SET hnsw.max_scan_tuples = 1000000")
             cur.execute(sql, params)
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
     return pd.DataFrame(rows, columns=columns)
+
+
+def _rewrite_query(question: str) -> str:
+    """Turn a conversational request into a short, embedding-friendly search phrase.
+
+    HNSW search starts in the query's semantic neighborhood; conversational
+    phrasing ("find me available sres") lands among scheduling emails, while
+    plain terms ("site reliability engineer") land among candidate profiles.
+    """
+    model = db.get_setting("OPENAI_MODEL", "gpt-4o-mini")
+    resp = _client().chat.completions.create(
+        model=model,
+        messages=[{
+            "role": "user",
+            "content": (
+                "Rewrite this recruiting-database question as a short search "
+                "phrase (2-6 words) describing the CONTENT to find. Expand "
+                "abbreviations (sre -> site reliability engineer). Reply with "
+                "ONLY the phrase.\n\nQuestion: " + question
+            ),
+        }],
+        temperature=0,
+    )
+    phrase = resp.choices[0].message.content.strip().strip('"')
+    return phrase or question
 
 
 def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
@@ -97,7 +122,22 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
 
     Returns (answer_text, sources_dataframe).
     """
-    hits = search(question, k=k)
+    # Stratified retrieval: guarantee representation for the small, high-value
+    # source tables (candidates/jobs/placements), which unfiltered search
+    # buries under the ~2.5M email chunks (mostly HTML boilerplate).
+    query = _rewrite_query(question)
+    parts = [
+        search(query, k=4, source_table="loxo_candidates"),
+        search(query, k=2, source_table="loxo_jobs"),
+        search(query, k=2, source_table="loxo_placements"),
+        search(query, k=k),
+    ]
+    hits = (
+        pd.concat(parts, ignore_index=True)
+        .drop_duplicates(subset=["source_table", "source_id", "chunk_index"])
+        .sort_values("similarity", ascending=False)
+        .reset_index(drop=True)
+    )
     if hits.empty:
         return "No indexed content matched that question.", hits
 
