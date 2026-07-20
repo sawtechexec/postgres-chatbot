@@ -117,7 +117,13 @@ else:
         try:
             with st.spinner("Thinking…"):
                 route = rag.route_question(question) if _rag_ready else "sql"
-                if route == "search":
+                if route == "hybrid":
+                    answer, sources = rag.answer_hybrid(question)
+                    entry = {"label": question, "df": sources, "answer": answer}
+                    if sources.attrs.get("sql"):
+                        entry["sql"] = sources.attrs["sql"]
+                    st.session_state.history.append(entry)
+                elif route == "search":
                     answer, sources = rag.answer_with_rag(question)
                     st.session_state.history.append(
                         {"label": question, "df": sources, "answer": answer}

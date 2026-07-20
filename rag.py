@@ -167,14 +167,24 @@ def route_question(question: str) -> str:
         model=model,
         messages=[{"role": "user", "content": (
             "Classify this question about a recruiting database. Reply with "
-            "exactly one word: 'sql' if it asks for counts, totals, dates, "
-            "rankings, or exact record lookups; 'search' if it asks to find "
-            "people, jobs, or content by description or similarity.\n\n"
+            "exactly one word:\n"
+            "'hybrid' if it concerns consultants, placements, clients, or "
+            "who is working where — EVEN IF it asks how many or for a list "
+            "(these need database records PLUS email evidence, since not "
+            "everything is entered in the database). Examples of 'hybrid': "
+            "'how many active consultants do we have', 'list our clients', "
+            "'who is placed at Citadel';\n"
+            "'sql' if it asks for other counts, totals, dates, rankings, or "
+            "exact record lookups;\n"
+            "'search' if it asks to find people, jobs, or content by "
+            "description or similarity.\n\n"
             "Question: " + question
         )}],
         temperature=0,
     )
     word = resp.choices[0].message.content.strip().lower()
+    if "hybrid" in word:
+        return "hybrid"
     return "sql" if "sql" in word else "search"
 
 
@@ -195,3 +205,59 @@ def summarize_rows(question: str, sql: str, df: pd.DataFrame) -> str:
         temperature=0,
     )
     return resp.choices[0].message.content.strip()
+
+
+def answer_hybrid(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
+    """Answer using Loxo SQL results PLUS email evidence.
+
+    Loxo only contains what people entered; emails often reveal placements
+    and clients that never made it into the database. The final answer
+    distinguishes Loxo-confirmed facts from email-inferred ones.
+    Returns (answer_text, email_sources_dataframe).
+    """
+    import queries
+
+    # Structured baseline from Loxo.
+    sql, df = "", pd.DataFrame()
+    sql_note = ""
+    try:
+        sql, df = queries.ask_with_llm(question)
+        sql_note = f"SQL used: {sql}\nResult (CSV, first 50 rows):\n" + df.head(50).to_csv(index=False)
+    except Exception as exc:  # noqa: BLE001
+        sql_note = f"The SQL lookup failed: {exc}"
+
+    # Email evidence via semantic search on a rewritten query.
+    query = _rewrite_query(question)
+    email_hits = search(query, k=k, source_table="emails")
+    email_context = "\n\n---\n\n".join(
+        f"[emails #{r.source_id}]\n{r.content}" for r in email_hits.itertuples()
+    ) or "(no relevant email excerpts found)"
+
+    model = db.get_setting("OPENAI_MODEL", "gpt-4o-mini")
+    prompt = (
+        "You are answering a question for a recruiting firm using two sources: "
+        "(1) a structured query over their Loxo database, and (2) excerpts from "
+        "their email archive. Loxo is authoritative but incomplete — people do "
+        "not always enter clients or placements there. Emails may reveal "
+        "additional placements or clients, but are noisy (HTML fragments, "
+        "scheduling boilerplate) and only suggestive.\n\n"
+        "Answer the question. Present Loxo results as confirmed facts. If the "
+        "emails suggest ADDITIONAL relevant placements, clients, or people not "
+        "in the Loxo results, list them separately as 'Possibly per emails "
+        "(not in Loxo)' with [emails #id] citations. Ignore email excerpts "
+        "that are irrelevant or pure boilerplate. Do not invent anything.\n\n"
+        f"--- Loxo database result ---\n{sql_note}\n\n"
+        f"--- Email excerpts ---\n{email_context}\n\n"
+        f"Question: {question}"
+    )
+    resp = _client().chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+    )
+    answer = resp.choices[0].message.content.strip()
+    if sql:
+        answer_df = email_hits
+        answer_df.attrs["sql"] = sql
+        return answer, answer_df
+    return answer, email_hits
