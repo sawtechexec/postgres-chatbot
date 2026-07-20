@@ -78,7 +78,18 @@ def search(question: str, k: int = 8, source_table: str | None = None) -> pd.Dat
         f"LIMIT {int(k)}"
     )
     params: tuple = (qvec, source_table, qvec) if source_table else (qvec, qvec)
-    return db.run_query(sql, params=params, limit=k)
+    # Direct connection (not db.run_query) so we can enable pgvector's
+    # iterative scan for filtered searches: with a WHERE clause, a plain HNSW
+    # scan may return only rows the filter discards, yielding empty results.
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            if source_table:
+                cur.execute("SET hnsw.iterative_scan = relaxed_order")
+                cur.execute("SET hnsw.max_scan_tuples = 100000")
+            cur.execute(sql, params)
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+    return pd.DataFrame(rows, columns=columns)
 
 
 def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
