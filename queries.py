@@ -89,6 +89,47 @@ PREDEFINED = {
 #  Optional OpenAI natural-language -> SQL                                     #
 # --------------------------------------------------------------------------- #
 
+
+DATA_DICTIONARY = """
+Business semantics and JSONB guidance (IMPORTANT — the bare schema is not enough):
+
+loxo_placements — one row per placement (a candidate placed in a job).
+  Flat columns: loxo_id, job_id, person_id, job_title, person_name, owner,
+  company (often NULL — do NOT rely on it), fee (often 0 — unreliable),
+  placed_at (timestamp).
+  The `raw` JSONB column holds the authoritative details. Key paths:
+    raw->'job_type'->>'name'            -- 'Contract' or 'Permanent'
+    (raw->>'start_date')::date          -- engagement start
+    (raw->>'end_date')::date            -- engagement end (may be null)
+    raw->'job'->'company'->>'name'      -- client company name (use this, not the flat column)
+    (raw->>'pay_rate')::numeric         -- pay rate
+    (raw->>'bill_rate')::numeric        -- bill rate
+    (raw->>'margin')::numeric           -- margin percent
+  Definitions:
+    "active consultant" / "consultant on billing" = placement where
+      raw->'job_type'->>'name' = 'Contract'
+      AND (raw->>'start_date')::date <= CURRENT_DATE
+      AND (raw->>'end_date' IS NULL OR (raw->>'end_date')::date >= CURRENT_DATE)
+    "permanent placement" = raw->'job_type'->>'name' = 'Permanent'
+    "placements in <year>" = filter on placed_at (or raw start_date).
+
+loxo_candidates — one row per candidate; loxo_jobs — one row per job
+  (join placements to them via person_id/job_id -> loxo_id).
+
+emails — ~939k recruiting emails; email_attachments — extracted attachment text.
+
+SQL rules:
+  - ALWAYS wrap OR conditions in parentheses, e.g.
+    AND ( raw->>'end_date' IS NULL OR (raw->>'end_date')::date >= CURRENT_DATE )
+  - For the company a consultant/placement is AT, use
+    raw->'job'->'company'->>'name' from loxo_placements — NEVER
+    loxo_candidates.current_company (that is stale profile text).
+
+Always prefer the JSON paths above over guessing column names. Never invent
+columns that are not in the schema or this dictionary.
+"""
+
+
 def openai_available() -> bool:
     return bool(db.get_setting("OPENAI_API_KEY"))
 
@@ -112,7 +153,7 @@ def ask_with_llm(question: str) -> tuple[str, pd.DataFrame]:
         "You are a PostgreSQL expert. Given the schema below, write ONE read-only "
         "SQL SELECT statement that answers the user's question. Return ONLY the SQL, "
         "no explanation, no markdown fences. Never write INSERT/UPDATE/DELETE/DDL.\n\n"
-        f"Schema:\n{schema}\n\nQuestion: {question}"
+        f"Schema:\n{schema}\n{DATA_DICTIONARY}\nQuestion: {question}"
     )
     resp = client.chat.completions.create(
         model=model,
