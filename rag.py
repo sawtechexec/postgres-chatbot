@@ -127,7 +127,7 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
     # buries under the ~2.5M email chunks (mostly HTML boilerplate).
     query = _rewrite_query(question)
     parts = [
-        search(query, k=4, source_table="loxo_candidates"),
+        search(query, k=12, source_table="loxo_candidates"),
         search(query, k=2, source_table="loxo_jobs"),
         search(query, k=2, source_table="loxo_placements"),
         search(query, k=k),
@@ -149,7 +149,10 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
         "Answer the user's question using ONLY the excerpts below, which come "
         "from a recruiting database (emails, candidates, jobs, placements). "
         "Cite sources inline like [emails #123]. If the excerpts don't contain "
-        "the answer, say so plainly.\n\n"
+        "the answer, say so plainly. When listing candidates, list ALL distinct "
+        "relevant people found in the excerpts (aim for completeness, not just "
+        "top 3-4). If two entries appear to be the same person (same or nearly "
+        "identical name), merge them into one entry citing both sources.\n\n"
         f"Excerpts:\n{context}\n\nQuestion: {question}"
     )
     resp = _client().chat.completions.create(
