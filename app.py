@@ -67,12 +67,9 @@ with st.sidebar:
     st.header("Mode")
     _rag_ready = rag.index_ready()
     if _rag_ready:
-        mode = st.radio(
-            "How should questions be answered?",
-            ["SQL (structured queries)", "Search (semantic / RAG)"],
-            help="SQL turns your question into a database query. "
-                 "Search finds the most relevant text across all four tables "
-                 "and answers from it.",
+        st.caption(
+            "Questions are answered automatically: content questions use "
+            "semantic search; counts, dates, and lookups use SQL."
         )
         with st.expander("Index contents"):
             try:
@@ -80,7 +77,6 @@ with st.sidebar:
             except Exception:  # noqa: BLE001
                 pass
     else:
-        mode = "SQL (structured queries)"
         st.caption("Semantic search is off — run ingest.py to build the index.")
 
 # --- Chat history -----------------------------------------------------------
@@ -90,20 +86,19 @@ if "history" not in st.session_state:
 
 def render_result(entry: dict) -> None:
     st.markdown(f"**{entry['label']}**")
-    if entry.get("sql"):
-        st.code(entry["sql"], language="sql")
     if entry.get("answer"):
         st.markdown(entry["answer"])
-        st.caption("Sources (most similar chunks):")
     df: pd.DataFrame = entry["df"]
-    st.dataframe(df, width="stretch")
-    # Offer a quick chart when it makes sense.
-    if df.shape[1] == 2 and pd.api.types.is_numeric_dtype(df.iloc[:, 1]):
-        try:
-            st.bar_chart(df.set_index(df.columns[0]))
-        except Exception:  # noqa: BLE001
-            pass
-    st.caption(f"{len(df)} rows")
+    with st.expander("Details"):
+        if entry.get("sql"):
+            st.code(entry["sql"], language="sql")
+        st.dataframe(df, width="stretch")
+        if df.shape[1] == 2 and pd.api.types.is_numeric_dtype(df.iloc[:, 1]):
+            try:
+                st.bar_chart(df.set_index(df.columns[0]))
+            except Exception:  # noqa: BLE001
+                pass
+        st.caption(f"{len(df)} rows")
 
 
 for entry in st.session_state.history:
@@ -120,17 +115,19 @@ else:
     question = st.chat_input("Ask a question about your data…")
     if question:
         try:
-            if mode.startswith("Search"):
-                with st.spinner("Searching…"):
+            with st.spinner("Thinking…"):
+                route = rag.route_question(question) if _rag_ready else "sql"
+                if route == "search":
                     answer, sources = rag.answer_with_rag(question)
-                st.session_state.history.append(
-                    {"label": question, "df": sources, "answer": answer}
-                )
-            else:
-                sql, df = queries.ask_with_llm(question)
-                st.session_state.history.append(
-                    {"label": question, "df": df, "sql": sql}
-                )
+                    st.session_state.history.append(
+                        {"label": question, "df": sources, "answer": answer}
+                    )
+                else:
+                    sql, df = queries.ask_with_llm(question)
+                    answer = rag.summarize_rows(question, sql, df)
+                    st.session_state.history.append(
+                        {"label": question, "df": df, "sql": sql, "answer": answer}
+                    )
             st.rerun()
         except Exception as exc:  # noqa: BLE001
             st.error(f"Could not answer that: {exc}")

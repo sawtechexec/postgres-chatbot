@@ -158,3 +158,40 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
         temperature=0,
     )
     return resp.choices[0].message.content.strip(), hits
+
+
+def route_question(question: str) -> str:
+    """Classify a question: 'sql' for counts/dates/lookups, 'search' for content."""
+    model = db.get_setting("OPENAI_MODEL", "gpt-4o-mini")
+    resp = _client().chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": (
+            "Classify this question about a recruiting database. Reply with "
+            "exactly one word: 'sql' if it asks for counts, totals, dates, "
+            "rankings, or exact record lookups; 'search' if it asks to find "
+            "people, jobs, or content by description or similarity.\n\n"
+            "Question: " + question
+        )}],
+        temperature=0,
+    )
+    word = resp.choices[0].message.content.strip().lower()
+    return "sql" if "sql" in word else "search"
+
+
+def summarize_rows(question: str, sql: str, df: pd.DataFrame) -> str:
+    """Turn a SQL result into a short plain-English answer."""
+    if df.empty:
+        return "No matching records were found for that question."
+    sample = df.head(50).to_csv(index=False)
+    model = db.get_setting("OPENAI_MODEL", "gpt-4o-mini")
+    resp = _client().chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": (
+            "Answer the user's question concisely in plain English using this "
+            "SQL result. Mention specific values/names. If the result has "
+            "exactly 50 rows it may be truncated; note that if so.\n\n"
+            f"Question: {question}\n\nSQL: {sql}\n\nResult (CSV):\n{sample}"
+        )}],
+        temperature=0,
+    )
+    return resp.choices[0].message.content.strip()
