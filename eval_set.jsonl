@@ -1,0 +1,50 @@
+{"id":"eval_001","question":"Who is the best candidate for a quantitative researcher role with Python and C++ experience?","expected":["Candidate name","Current employer","Years of experience","Python experience","C++ experience","Relevant quantitative background","Brief explanation for why they are the best fit"]}
+{"id":"eval_002","question":"Which candidates have interviewed at Citadel in the past?","expected":["Candidate names","Interview dates","Roles interviewed for","Interview outcomes","Current status"]}
+{"id":"eval_003","question":"Find candidates that worked at Jane Street and are now open to new opportunities.","expected":["Candidate names","Jane Street roles","Employment dates","Current availability","Current employer if applicable"]}
+{"id":"eval_004","question":"Which candidate has experience in systematic macro investing?","expected":["Candidate name(s)","Relevant firms","Years of experience","Strategy details","Supporting evidence"]}
+{"id":"eval_005","question":"Which candidates specialize in low-latency C++?","expected":["Candidate names","Relevant employers","Years using C++","Low-latency systems/projects","Supporting notes"]}
+{"id":"eval_006","question":"Which candidate has the strongest options market-making background?","expected":["Candidate name","Market-making firms","Years of experience","Products traded","Reason they rank highest"]}
+{"id":"eval_007","question":"Find every portfolio manager covering healthcare.","expected":["Candidate names","Current/previous firms","Healthcare focus","Years covering healthcare"]}
+{"id":"eval_008","question":"Which candidates previously worked together?","expected":["Candidate pairs","Shared employer","Overlapping employment dates"]}
+{"id":"eval_009","question":"Who has the most buy-side experience?","expected":["Candidate name","Total buy-side years","Relevant firms","Supporting reasoning"]}
+{"id":"eval_010","question":"Which candidates recently updated their availability?","expected":["Candidate names","Availability status","Date updated"]}
+{"id":"eval_011","question":"Summarize our relationship with Millennium.","expected":["Primary contacts","Placements","Active searches","Recent communications","Relationship summary"]}
+{"id":"eval_012","question":"Who is the primary contact at Point72?","expected":["Contact name","Title","Team","Most recent interaction"]}
+{"id":"eval_013","question":"Which hiring manager has been the most responsive?","expected":["Hiring manager","Evidence","Response frequency","Supporting data"]}
+{"id":"eval_014","question":"What positions has Citadel hired through us?","expected":["Position titles","Placement dates","Candidate names if available"]}
+{"id":"eval_015","question":"Which clients have been inactive for over one year?","expected":["Client names","Last communication","Last placement/activity"]}
+{"id":"eval_016","question":"Summarize every interaction with Balyasny.","expected":["Timeline","Main contacts","Searches","Placements","Outstanding items"]}
+{"id":"eval_017","question":"Which client recently increased hiring?","expected":["Client","Evidence","New openings","Timeframe"]}
+{"id":"eval_018","question":"Which hedge fund rejected the most candidates?","expected":["Firm","Number of rejections","Relevant timeframe"]}
+{"id":"eval_019","question":"Summarize the last five emails with Candidate X.","expected":["Summary of each email","Current status","Outstanding actions"]}
+{"id":"eval_020","question":"Has Candidate X accepted another offer?","expected":["Yes, No, or Unknown","Supporting evidence","Relevant date"]}
+{"id":"eval_021","question":"Is Candidate X still interviewing?","expected":["Current interview status","Firms","Interview stage","Evidence"]}
+{"id":"eval_022","question":"Why did Candidate X decline the offer?","expected":["Reason(s)","Compensation factors","Location","Culture","Counteroffer if applicable"]}
+{"id":"eval_023","question":"What concerns did Candidate X express?","expected":["List of concerns","Supporting emails or notes"]}
+{"id":"eval_024","question":"Summarize every compensation discussion with Candidate X.","expected":["Salary expectations","Bonus expectations","Timeline","Most recent expectations"]}
+{"id":"eval_025","question":"Extract every interview date for Candidate X.","expected":["Chronological interview dates","Firm","Interview stage"]}
+{"id":"eval_026","question":"What action items remain outstanding for Candidate X?","expected":["Outstanding tasks","Responsible party","Due dates if available"]}
+{"id":"eval_027","question":"What is Candidate X's most recent compensation?","expected":["Current base","Bonus","Date","Evidence"]}
+{"id":"eval_028","question":"Ignore outdated salary information and provide Candidate X's current compensation expectations.","expected":["Most recent compensation","Ignore superseded information","Latest update date"]}
+{"id":"eval_029","question":"Which office is Candidate X currently located in?","expected":["Current office","Date confirmed","Supporting evidence"]}
+{"id":"eval_030","question":"Has Candidate X changed firms?","expected":["Employment timeline","Previous employer","Current employer","Dates"]}
+{"id":"eval_031","question":"Which version of Candidate X's resume is the newest?","expected":["Resume date","Version","Supporting evidence"]}
+{"id":"eval_032","question":"Which email contains the latest status update for Candidate X?","expected":["Email date","Sender","Summary"]}
+{"id":"eval_033","question":"Which candidate has won a Nobel Prize?","expected":["No evidence found if none exists","No hallucinations"]}
+{"id":"eval_034","question":"What is Candidate X's GPA?","expected":["GPA if documented","Otherwise 'Not available'"]}
+{"id":"eval_035","question":"What is Candidate X's phone number?","expected":["Phone number if documented","Otherwise 'Not available'"]}
+{"id":"eval_036","question":"Did Candidate X interview with Bridgewater?","expected":["Yes, No, or No evidence found","Supporting evidence"]}
+{"id":"eval_037","question":"What is Candidate X's visa status?","expected":["Visa status if documented","Otherwise 'Not available'"]}
+{"id":"eval_038","question":"Which hedge fund ultimately hired Candidate X?","expected":["Firm","Offer date","Start date","Supporting evidence"]}
+{"id":"eval_039","question":"What bonus was discussed with Candidate X?","expected":["Bonus amount","Date","Context","Supporting source"]}
+{"id":"eval_040","question":"What happened after Candidate X's last interview?","expected":["Timeline","Outcome","Next steps"]}
+{"id":"eval_041","question":"Combine Candidate X's resume, CRM notes, and emails into a comprehensive summary.","expected":["Career history","Technical skills","Compensation","Interview history","Availability","Recruiter notes"]}
+{"id":"eval_042","question":"Explain why Candidate X was rejected despite appearing to match the role.","expected":["Evidence-based explanation","Supporting emails/notes","No speculation"]}
+{"id":"eval_043","question":"Which candidate is the best fit for Job Y? Explain your reasoning.","expected":["Recommended candidate","Supporting qualifications","Reasoning"]}
+{"id":"eval_044","question":"Compare Candidate A and Candidate B across experience, technical skills, compensation expectations, and likelihood of accepting an offer.","expected":["Experience comparison","Skills comparison","Compensation comparison","Availability","Recommendation"]}
+{"id":"eval_045","question":"Rank the top five candidates for Job Y.","expected":["Ranked list","Justification for each ranking"]}
+{"id":"eval_046","question":"Summarize every interaction between Candidate X and Client Y.","expected":["Timeline","Meetings","Interviews","Emails","Outcomes"]}
+{"id":"eval_047","question":"Build a chronological timeline of Candidate X.","expected":["Employment","Recruiter interactions","Interviews","Offers","Status changes"]}
+{"id":"eval_048","question":"Identify inconsistencies between Candidate X's resume, CRM notes, and emails.","expected":["List of inconsistencies","Sources","Confidence level"]}
+{"id":"eval_049","question":"Based on all available information, is Candidate X still interested in new opportunities?","expected":["Yes, No, or Unclear","Supporting evidence","Most recent communication"]}
+{"id":"eval_050","question":"What should the recruiter do next regarding Candidate X?","expected":["Recommended next action","Reasoning","Evidence from available data"]}

@@ -141,6 +141,28 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
     if hits.empty:
         return "No indexed content matched that question.", hits
 
+    # Chunk expansion: for structured Loxo records, fetch ALL chunks of each
+    # retrieved record so details (employer, employment dates) aren't cut off
+    # mid-resume. Loxo records are only a few chunks each, so this is cheap.
+    loxo = hits[hits.source_table.str.startswith("loxo_")]
+    if not loxo.empty:
+        keys = list({(r.source_table, r.source_id) for r in loxo.itertuples()})
+        clauses = " OR ".join(["(source_table = %s AND source_id = %s)"] * len(keys))
+        params = tuple(x for k in keys for x in k)
+        sibs = db.run_query(
+            "SELECT source_table, source_id, chunk_index, content, "
+            "0.0 AS similarity FROM rag_chunks "
+            f"WHERE ({clauses}) AND chunk_index < 8 "
+            "ORDER BY source_table, source_id, chunk_index",
+            params,
+        )
+        hits = (
+            pd.concat([hits, sibs], ignore_index=True)
+            .drop_duplicates(subset=["source_table", "source_id", "chunk_index"])
+            .sort_values(["source_table", "source_id", "chunk_index"])
+            .reset_index(drop=True)
+        )
+
     context = "\n\n---\n\n".join(
         f"[{r.source_table} #{r.source_id}]\n{r.content}" for r in hits.itertuples()
     )
@@ -149,9 +171,21 @@ def answer_with_rag(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
         "Answer the user's question using ONLY the excerpts below, which come "
         "from a recruiting database (emails, candidates, jobs, placements). "
         "Cite sources inline like [emails #123]. If the excerpts don't contain "
-        "the answer, say so plainly. When listing candidates, list ALL distinct "
-        "relevant people found in the excerpts (aim for completeness, not just "
-        "top 3-4). If two entries appear to be the same person (same or nearly "
+        "the answer, say so plainly.\n\n"
+        "Match the form of the question:\n"
+        "- If it asks for THE BEST or strongest single candidate, name ONE "
+        "primary recommendation, state their current employer and years of "
+        "experience in the first paragraph, and explain specifically why they "
+        "beat the runners-up (compare experience, skills, and background - "
+        "not generic praise), then list runners-up briefly.\n"
+        "- If it asks to find or list candidates, list ALL distinct relevant "
+        "people found in the excerpts (completeness over brevity).\n\n"
+        "For each person mentioned, include concrete specifics when the "
+        "excerpts support them: current employer, years of relevant "
+        "experience stated as an explicit number (e.g. '~12 years' - compute "
+        "from employment dates when not stated directly), and key skills. Never invent specifics not grounded in "
+        "the excerpts.\n\n"
+        "If two entries appear to be the same person (same or nearly "
         "identical name), merge them into one entry citing both sources.\n\n"
         f"Excerpts:\n{context}\n\nQuestion: {question}"
     )
