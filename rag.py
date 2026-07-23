@@ -343,9 +343,37 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
     # keep each candidate chunk once, highest similarity first
     pool = pool.sort_values("similarity", ascending=False).drop_duplicates(subset="source_id").head(25)
 
+    # Fetch ALL chunks of each shortlisted candidate so names and details
+    # (stored in chunk 0) aren't missing from the context.
+    ids = pool["source_id"].unique().tolist()
+    placeholders = ", ".join(["%s"] * len(ids))
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            # Join back to loxo_candidates for the real name, and skip
+            # polluted records (job specs saved as candidates, detectable
+            # by search-query linkedin URLs).
+            cur.execute(
+                "SELECT c.source_id, c.chunk_index, c.content, lc.name "
+                "FROM rag_chunks c "
+                "JOIN loxo_candidates lc ON lc.loxo_id::text = c.source_id "
+                f"WHERE c.source_table = 'loxo_candidates' AND c.source_id IN ({placeholders}) "
+                "AND (lc.linkedin_url IS NULL OR lc.linkedin_url NOT ILIKE '%%/search/%%') "
+                "ORDER BY c.source_id, c.chunk_index",
+                ids,
+            )
+            cols = [d[0] for d in cur.description]
+            full = pd.DataFrame(cur.fetchall(), columns=cols)
+
+    if full.empty:
+        return ("All records matching this JD appear to be data-quality "
+                "artifacts rather than real candidates."), pool
+
+    records = full.groupby("source_id", sort=False).agg(
+        name=("name", "first"), text=("content", "\n".join)
+    )
     context = "\n\n---\n\n".join(
-        f"[Candidate record {row.source_id}] (matched: {row.matched_query})\n{row.content}"
-        for row in pool.itertuples()
+        f"[{row.name or 'Unknown'} — record {sid}]\n{row.text}"
+        for sid, row in records.iterrows()
     )
 
     resp = _client().chat.completions.create(
@@ -356,9 +384,9 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             f"Skills: {', '.join(jd.get('skills', []))}\n"
             f"Industry: {jd.get('industry')}\nLocation: {jd.get('location')}\n\n"
             f"Below are candidate records retrieved from our database. Produce a "
-            f"ranked shortlist of the best matches. For each: name (if present), "
+            f"ranked shortlist of the best matches. For each: the candidate name from the record header, the record ID, "
             f"a one-line rationale citing which record supports it, and any gaps "
-            f"vs. the role requirements. Only use candidates from the records "
+            f"vs. the role requirements. List each candidate EXACTLY ONCE. Only use candidates from the records "
             f"below — never invent people. If few are strong matches, say so.\n\n"
             f"{context}"
         )}],
