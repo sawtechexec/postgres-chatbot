@@ -367,7 +367,7 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             # polluted records (job specs saved as candidates, detectable
             # by search-query linkedin URLs).
             cur.execute(
-                "SELECT c.source_id, c.chunk_index, c.content, lc.name, lc.title, lc.current_company "
+                "SELECT c.source_id, c.chunk_index, c.content, lc.name, lc.title, lc.current_company, lc.emails, lc.phones "
                 "FROM rag_chunks c "
                 "JOIN loxo_candidates lc ON lc.loxo_id::text = c.source_id "
                 f"WHERE c.source_table = 'loxo_candidates' AND c.source_id IN ({placeholders}) "
@@ -384,11 +384,14 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
 
     records = full.groupby("source_id", sort=False).agg(
         name=("name", "first"), title=("title", "first"),
-        company=("current_company", "first"), text=("content", "\n".join)
+        company=("current_company", "first"), emails=("emails", "first"),
+        phones=("phones", "first"), text=("content", "\n".join)
     )
     context = "\n\n---\n\n".join(
         f"[{row.name or 'Unknown'} — {row.title or 'title unknown'}"
-        f"{' @ ' + row.company if row.company else ''} — record {sid}]\n{row.text}"
+        f"{' @ ' + row.company if row.company else ''} — record {sid}]\n"
+        f"Email: {row.emails or 'not on file'} | Phone: {row.phones or 'not on file'}\n"
+        f"{row.text}"
         for sid, row in records.iterrows()
     )
 
@@ -400,7 +403,7 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             f"Skills: {', '.join(jd.get('skills', []))}\n"
             f"Industry: {jd.get('industry')}\nLocation: {jd.get('location')}\n\n"
             f"Below are candidate records retrieved from our database. Produce a "
-            f"ranked shortlist of the best matches, weighing seniority fit heavily: prefer candidates whose title matches the target level, and flag clearly under-leveled candidates. For each: the candidate name from the record header, the record ID, "
+            f"ranked shortlist of the best matches, weighing seniority fit heavily: prefer candidates whose title matches the target level, and flag clearly under-leveled candidates. For each: the candidate name, title, and company from the record header, the record ID, then their Email and Phone copied EXACTLY as shown in the record (or 'not on file'), then "
             f"a one-line rationale citing which record supports it, and any gaps "
             f"vs. the role requirements. List each candidate EXACTLY ONCE. Only use candidates from the records "
             f"below — never invent people. If few are strong matches, say so.\n\n"
