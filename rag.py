@@ -335,6 +335,20 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             df["matched_query"] = q
             frames.append(df)
 
+    # Guarantee senior-titled candidates enter the pool: vector search
+    # rewards keyword density, so strong-but-terse executive profiles get
+    # buried. Search them directly by title match on the JD's key terms.
+    title_terms = [jd.get("title", ""), jd.get("seniority", "")]
+    title_terms = [t for t in title_terms if t]
+    if title_terms:
+        for q in jd.get("queries", [])[:3]:
+            df = search(f"{jd.get('seniority', '')} {q}".strip(),
+                        k=k_per_query, source_table="loxo_candidates")
+            if not df.empty:
+                df = df.copy()
+                df["matched_query"] = f"seniority: {q}"
+                frames.append(df)
+
     if not frames:
         return ("I couldn't find any candidate records matching this job "
                 "description in the database."), pd.DataFrame()
@@ -353,7 +367,7 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             # polluted records (job specs saved as candidates, detectable
             # by search-query linkedin URLs).
             cur.execute(
-                "SELECT c.source_id, c.chunk_index, c.content, lc.name "
+                "SELECT c.source_id, c.chunk_index, c.content, lc.name, lc.title, lc.current_company "
                 "FROM rag_chunks c "
                 "JOIN loxo_candidates lc ON lc.loxo_id::text = c.source_id "
                 f"WHERE c.source_table = 'loxo_candidates' AND c.source_id IN ({placeholders}) "
@@ -369,10 +383,12 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
                 "artifacts rather than real candidates."), pool
 
     records = full.groupby("source_id", sort=False).agg(
-        name=("name", "first"), text=("content", "\n".join)
+        name=("name", "first"), title=("title", "first"),
+        company=("current_company", "first"), text=("content", "\n".join)
     )
     context = "\n\n---\n\n".join(
-        f"[{row.name or 'Unknown'} — record {sid}]\n{row.text}"
+        f"[{row.name or 'Unknown'} — {row.title or 'title unknown'}"
+        f"{' @ ' + row.company if row.company else ''} — record {sid}]\n{row.text}"
         for sid, row in records.iterrows()
     )
 
@@ -384,7 +400,7 @@ def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd
             f"Skills: {', '.join(jd.get('skills', []))}\n"
             f"Industry: {jd.get('industry')}\nLocation: {jd.get('location')}\n\n"
             f"Below are candidate records retrieved from our database. Produce a "
-            f"ranked shortlist of the best matches. For each: the candidate name from the record header, the record ID, "
+            f"ranked shortlist of the best matches, weighing seniority fit heavily: prefer candidates whose title matches the target level, and flag clearly under-leveled candidates. For each: the candidate name from the record header, the record ID, "
             f"a one-line rationale citing which record supports it, and any gaps "
             f"vs. the role requirements. List each candidate EXACTLY ONCE. Only use candidates from the records "
             f"below — never invent people. If few are strong matches, say so.\n\n"
