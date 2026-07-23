@@ -300,3 +300,68 @@ def answer_hybrid(question: str, k: int = 8) -> tuple[str, pd.DataFrame]:
         answer_df.attrs["sql"] = sql
         return answer, answer_df
     return answer, email_hits
+
+
+# --- JD matching -----------------------------------------------------------
+
+def distill_jd(jd_text: str) -> dict:
+    """Extract role facts + search queries from a job description."""
+    import json
+    resp = _client().chat.completions.create(
+        model=db.get_setting("OPENAI_MODEL", "gpt-4o-mini"),
+        messages=[{"role": "user", "content": (
+            "Extract from this job description and return ONLY valid JSON, "
+            "no markdown fences, with keys: title (string), seniority (string), "
+            "skills (list of 3-6 strings), industry (string), location (string), "
+            "queries (list of 4-6 short recruiter-style search queries to find "
+            "matching candidates).\n\nJob description:\n" + jd_text[:6000]
+        )}],
+        temperature=0,
+    )
+    raw = resp.choices[0].message.content.strip()
+    raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    return json.loads(raw)
+
+
+def match_candidates_to_jd(jd_text: str, k_per_query: int = 10) -> tuple[str, pd.DataFrame]:
+    """Distill a JD, search candidate chunks per query, synthesize a shortlist."""
+    jd = distill_jd(jd_text)
+
+    frames = []
+    for q in jd.get("queries", []):
+        df = search(q, k=k_per_query, source_table="loxo_candidates")
+        if not df.empty:
+            df = df.copy()
+            df["matched_query"] = q
+            frames.append(df)
+
+    if not frames:
+        return ("I couldn't find any candidate records matching this job "
+                "description in the database."), pd.DataFrame()
+
+    pool = pd.concat(frames, ignore_index=True)
+    # keep each candidate chunk once, highest similarity first
+    pool = pool.sort_values("similarity", ascending=False).drop_duplicates(subset="source_id").head(25)
+
+    context = "\n\n---\n\n".join(
+        f"[Candidate record {row.source_id}] (matched: {row.matched_query})\n{row.content}"
+        for row in pool.itertuples()
+    )
+
+    resp = _client().chat.completions.create(
+        model=db.get_setting("OPENAI_MODEL", "gpt-4o-mini"),
+        messages=[{"role": "user", "content": (
+            f"You are helping a recruiter fill this role:\n"
+            f"Title: {jd.get('title')}\nSeniority: {jd.get('seniority')}\n"
+            f"Skills: {', '.join(jd.get('skills', []))}\n"
+            f"Industry: {jd.get('industry')}\nLocation: {jd.get('location')}\n\n"
+            f"Below are candidate records retrieved from our database. Produce a "
+            f"ranked shortlist of the best matches. For each: name (if present), "
+            f"a one-line rationale citing which record supports it, and any gaps "
+            f"vs. the role requirements. Only use candidates from the records "
+            f"below — never invent people. If few are strong matches, say so.\n\n"
+            f"{context}"
+        )}],
+        temperature=0,
+    )
+    return resp.choices[0].message.content, pool

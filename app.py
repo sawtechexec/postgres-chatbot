@@ -4,6 +4,10 @@ Run with:  streamlit run app.py
 """
 from __future__ import annotations
 
+import io
+from pypdf import PdfReader
+import docx
+
 import pandas as pd
 import streamlit as st
 
@@ -38,6 +42,16 @@ def check_password() -> None:
 
 
 check_password()
+
+def extract_jd_text(uploaded_file) -> str:
+    name = uploaded_file.name.lower()
+    data = uploaded_file.read()
+    if name.endswith(".pdf"):
+        reader = PdfReader(io.BytesIO(data))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if name.endswith(".docx"):
+        return "\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)
+    return data.decode("utf-8", errors="ignore")
 
 st.title("🗄️ Postgres Data Chatbot")
 
@@ -112,6 +126,25 @@ if not queries.openai_available():
         "to enable asking questions in plain English."
     )
 else:
+    jd_file = st.file_uploader(
+        "Optional: upload a job description to find matching candidates",
+        type=["pdf", "docx", "txt"],
+    )
+    if jd_file and st.button("Find candidates for this JD"):
+        try:
+            with st.spinner("Reading JD and searching candidates…"):
+                jd_text = extract_jd_text(jd_file)
+                if len(jd_text.strip()) < 100:
+                    st.warning("Couldn't extract much text — is it a scanned PDF?")
+                else:
+                    answer, sources = rag.match_candidates_to_jd(jd_text)
+                    st.session_state.history.append(
+                        {"label": f"JD match: {jd_file.name}", "df": sources, "answer": answer}
+                    )
+                    st.rerun()
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Could not process the JD: {exc}")
+
     question = st.chat_input("Ask a question about your data…")
     if question:
         try:
