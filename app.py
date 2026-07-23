@@ -98,7 +98,22 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 
-def render_result(entry: dict) -> None:
+def _save_feedback(idx: int) -> None:
+    entry = st.session_state.history[idx]
+    rating = st.session_state.get(f"feedback_{idx}")
+    if rating is None:
+        return
+    try:
+        db.log_feedback(
+            entry.get("label", ""),
+            entry.get("answer", ""),
+            "up" if rating == 1 else "down",
+        )
+    except Exception:  # noqa: BLE001
+        pass  # never let feedback logging break the app
+
+
+def render_result(entry: dict, idx: int) -> None:
     st.markdown(f"**{entry['label']}**")
     if entry.get("answer"):
         st.markdown(entry["answer"])
@@ -113,11 +128,12 @@ def render_result(entry: dict) -> None:
             except Exception:  # noqa: BLE001
                 pass
         st.caption(f"{len(df)} rows")
+    st.feedback("thumbs", key=f"feedback_{idx}", on_change=_save_feedback, args=(idx,))
 
 
-for entry in st.session_state.history:
+for i, entry in enumerate(st.session_state.history):
     with st.chat_message("assistant"):
-        render_result(entry)
+        render_result(entry, i)
 
 # --- Ask questions in plain English -----------------------------------------
 if not queries.openai_available():

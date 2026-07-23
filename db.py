@@ -141,3 +141,22 @@ def schema_summary(max_tables: int = 40) -> str:
         col_list = ", ".join(f"{c.column_name} {c.data_type}" for c in cols.itertuples())
         lines.append(f"{row.table_schema}.{row.table_name}({col_list})")
     return "\n".join(lines)
+
+
+# ---- Feedback logging (the one intentional write) --------------------------
+
+def log_feedback(question: str, answer: str, rating: str) -> None:
+    """Insert a thumbs up/down rating into the feedback table.
+
+    Uses its own connection because get_connection() is read-only by design.
+    """
+    conn = psycopg2.connect(**_conn_kwargs())
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO feedback (question, answer, rating) VALUES (%s, %s, %s)",
+                (question, answer, rating),
+            )
+    finally:
+        conn.close()
